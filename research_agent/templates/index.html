@@ -1,0 +1,125 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ResearchAgent</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">Academic Discovery Studio</p>
+          <h1>ResearchAgent</h1>
+          <p class="hero-copy">
+            面向科研检索的论文发现与相关性分级系统。支持标题、摘要、关键词、DOI、arXiv ID、研究描述和 PDF 上传，基于 Semantic Scholar 给出多维评分、等级解释与导出结果。
+          </p>
+        </div>
+        <div class="hero-card">
+          <div class="metric">
+            <span>默认返回</span>
+            <strong>{{ search_limit }}</strong>
+          </div>
+          <div class="metric">
+            <span>分级语义</span>
+            <strong>A / B / C / D</strong>
+          </div>
+          <div class="metric">
+            <span>数据源</span>
+            <strong>Semantic Scholar</strong>
+          </div>
+        </div>
+      </header>
+
+      <main class="layout-grid">
+        <section class="panel query-panel">
+          <div class="panel-head">
+            <h2>查询输入</h2>
+            <p>至少填写一种输入方式，PDF 可与文本混合使用。</p>
+          </div>
+          <form id="search-form" class="query-form">
+            <label>
+              <span>论文标题</span>
+              <input type="text" name="title" placeholder="例如: Attention Is All You Need">
+            </label>
+            <label>
+              <span>摘要</span>
+              <textarea name="abstract" rows="6" placeholder="粘贴论文摘要或核心问题描述"></textarea>
+            </label>
+            <label>
+              <span>关键词</span>
+              <input type="text" name="keywords" placeholder="用逗号分隔，例如 transformer, multimodal learning, medical imaging">
+            </label>
+            <div class="split-row">
+              <label>
+                <span>DOI</span>
+                <input type="text" name="doi" placeholder="10.1038/nature14539">
+              </label>
+              <label>
+                <span>arXiv ID</span>
+                <input type="text" name="arxiv_id" placeholder="1706.03762">
+              </label>
+            </div>
+            <label>
+              <span>研究方向/自然语言需求</span>
+              <textarea name="topic_text" rows="5" placeholder="例如：帮我找多模态医学影像报告生成方向中，结合 Transformer 和 RAG 的高相关论文"></textarea>
+            </label>
+            <label>
+              <span>PDF 文件</span>
+              <input type="file" name="pdf_file" accept="application/pdf">
+            </label>
+            <div class="actions-row">
+              <button type="submit" class="primary-button">开始检索</button>
+              <button type="reset" class="ghost-button" id="reset-button">清空</button>
+            </div>
+          </form>
+        </section>
+
+        <section class="panel results-panel">
+          <div class="panel-head sticky-head">
+            <div>
+              <h2>检索结果</h2>
+              <p id="status-text">等待查询</p>
+            </div>
+            <div class="export-row">
+              <button class="ghost-button export-button" data-format="json" disabled>导出 JSON</button>
+              <button class="ghost-button export-button" data-format="csv" disabled>导出 CSV</button>
+              <button class="ghost-button export-button" data-format="md" disabled>导出 Markdown</button>
+            </div>
+          </div>
+
+          <div class="filters">
+            <div class="filter-group levels">
+              <span>等级筛选</span>
+              <label><input type="checkbox" value="A" checked>A</label>
+              <label><input type="checkbox" value="B" checked>B</label>
+              <label><input type="checkbox" value="C" checked>C</label>
+              <label><input type="checkbox" value="D" checked>D</label>
+            </div>
+            <div class="filter-group years">
+              <span>年份范围</span>
+              <input id="year-from" type="number" placeholder="起始年">
+              <input id="year-to" type="number" placeholder="结束年">
+            </div>
+            <div class="filter-group sort">
+              <span>排序</span>
+              <select id="sort-by">
+                <option value="relevance_score">按相关性</option>
+                <option value="year">按发表时间</option>
+                <option value="citation_count">按引用量</option>
+              </select>
+            </div>
+          </div>
+
+          <div id="message-box" class="message-box hidden"></div>
+          <section id="query-summary" class="summary-block hidden"></section>
+          <section id="overview-block" class="overview-block hidden"></section>
+          <section id="clusters-block" class="clusters-block hidden"></section>
+          <section id="results-list" class="results-list"></section>
+        </section>
+      </main>
+    </div>
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+  </body>
+</html>
