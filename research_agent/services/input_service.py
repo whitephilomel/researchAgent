@@ -35,6 +35,10 @@ class InputService:
             topic_text=str(payload.get("topic_text", "") or "").strip(),
             pdf_filename=str(payload.get("pdf_filename", "") or "").strip(),
             pdf_text=str(payload.get("pdf_text", "") or "").strip(),
+            result_limit=self._parse_result_limit(payload.get("result_limit")),
+            page=self._parse_page(payload.get("page")),
+            exhaustive_search=self._parse_bool(payload.get("exhaustive_search")),
+            search_session_id=str(payload.get("search_session_id", "") or "").strip(),
         )
         self.validate(query)
         return query
@@ -47,6 +51,10 @@ class InputService:
             doi=self._normalize_doi(str(form.get("doi", "") or "")),
             arxiv_id=self._normalize_arxiv_id(str(form.get("arxiv_id", "") or "")),
             topic_text=str(form.get("topic_text", "") or "").strip(),
+            result_limit=self._parse_result_limit(form.get("result_limit")),
+            page=self._parse_page(form.get("page")),
+            exhaustive_search=self._parse_bool(form.get("exhaustive_search")),
+            search_session_id=str(form.get("search_session_id", "") or "").strip(),
         )
         uploaded = files.get("pdf_file") if files else None
         if uploaded and getattr(uploaded, "filename", ""):
@@ -64,7 +72,7 @@ class InputService:
         return query
 
     def validate(self, query: QueryInput) -> None:
-        if not query.has_any_content():
+        if not query.search_session_id and not query.has_any_content():
             raise ValueError("请至少提供标题、摘要、关键词、DOI、arXiv ID、研究描述或 PDF 文件。")
         if query.title and len(query.title) > 500:
             raise ValueError("标题长度不能超过 500 个字符。")
@@ -74,6 +82,10 @@ class InputService:
             raise ValueError("研究描述长度不能超过 12000 个字符。")
         if query.doi and "/" not in query.doi:
             raise ValueError("DOI 格式无效，请检查后重试。")
+        if not (1 <= query.result_limit <= self.settings.max_search_limit):
+            raise ValueError(f"返回条数必须在 1 到 {self.settings.max_search_limit} 之间。")
+        if query.page < 1:
+            raise ValueError("页码必须大于等于 1。")
 
     def parse_pdf_upload(self, uploaded: FileStorage) -> dict[str, str]:
         filename = (uploaded.filename or "").strip()
@@ -115,6 +127,29 @@ class InputService:
             "doi": doi,
             "arxiv_id": arxiv_id,
         }
+
+    def _parse_result_limit(self, value: Any) -> int:
+        if value is None or str(value).strip() == "":
+            return self.settings.search_limit
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError):
+            raise ValueError("返回条数必须是整数。")
+        return parsed
+
+    def _parse_page(self, value: Any) -> int:
+        if value is None or str(value).strip() == "":
+            return 1
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError):
+            raise ValueError("页码必须是整数。")
+        return parsed
+
+    def _parse_bool(self, value: Any) -> bool:
+        if isinstance(value, bool):
+            return value
+        return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
 
     def _split_keywords(self, value: Any) -> list[str]:
         if isinstance(value, list):

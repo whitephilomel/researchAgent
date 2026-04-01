@@ -14,6 +14,16 @@ def _int_env(name: str, default: int) -> int:
         return default
 
 
+def _float_env(name: str, default: float) -> float:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    try:
+        return float(value)
+    except ValueError:
+        return default
+
+
 @dataclass(frozen=True)
 class Settings:
     app_name: str = "ResearchAgent"
@@ -28,8 +38,14 @@ class Settings:
         20,
     )
     search_limit: int = _int_env("SEARCH_LIMIT", 20)
+    max_search_limit: int = _int_env("MAX_SEARCH_LIMIT", 1000)
     ranked_search_limit: int = _int_env("RANKED_SEARCH_LIMIT", 15)
     bulk_search_limit: int = _int_env("BULK_SEARCH_LIMIT", 25)
+    max_ranked_page_size: int = 100
+    max_bulk_page_size: int = 1000
+    exhaustive_max_items: int = _int_env("EXHAUSTIVE_MAX_ITEMS", 0)
+    cache_ttl_seconds: int = _int_env("SEARCH_CACHE_TTL_SECONDS", 900)
+    bulk_page_sleep_seconds: float = _float_env("BULK_PAGE_SLEEP_SECONDS", 0.1)
     max_pdf_size_bytes: int = _int_env("MAX_PDF_SIZE_MB", 15) * 1024 * 1024
     max_context_chars: int = 6000
     allowed_export_formats: tuple[str, ...] = ("json", "csv", "md")

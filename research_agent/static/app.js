@@ -4,12 +4,17 @@
 
 const form = document.getElementById("search-form");
 const resetButton = document.getElementById("reset-button");
+const pageInput = document.getElementById("page-input");
 const resultsList = document.getElementById("results-list");
 const statusText = document.getElementById("status-text");
 const messageBox = document.getElementById("message-box");
 const querySummary = document.getElementById("query-summary");
 const overviewBlock = document.getElementById("overview-block");
 const clustersBlock = document.getElementById("clusters-block");
+const paginationBlock = document.getElementById("pagination-block");
+const pageStatus = document.getElementById("page-status");
+const prevPageButton = document.getElementById("prev-page");
+const nextPageButton = document.getElementById("next-page");
 const sortBy = document.getElementById("sort-by");
 const yearFrom = document.getElementById("year-from");
 const yearTo = document.getElementById("year-to");
@@ -18,50 +23,38 @@ const exportButtons = Array.from(document.querySelectorAll(".export-button"));
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
-  setLoading(true);
-  hideMessage();
-  const payload = new FormData(form);
-  try {
-    const response = await fetch("/api/search", {
-      method: "POST",
-      body: payload,
-    });
-    const data = await response.json();
-    if (!response.ok) {
-      throw new Error(data.error || "搜索失败");
-    }
-    state.response = data;
-    exportButtons.forEach((button) => {
-      button.disabled = false;
-    });
-    renderAll();
-  } catch (error) {
-    state.response = null;
-    exportButtons.forEach((button) => {
-      button.disabled = true;
-    });
-    resultsList.innerHTML = "";
-    querySummary.classList.add("hidden");
-    overviewBlock.classList.add("hidden");
-    clustersBlock.classList.add("hidden");
-    showMessage(error.message, true);
-    statusText.textContent = "查询失败";
-  } finally {
-    setLoading(false);
-  }
+  pageInput.value = "1";
+  await performSearch({ useSession: false });
 });
 
 resetButton.addEventListener("click", () => {
   state.response = null;
+  pageInput.value = "1";
   resultsList.innerHTML = "";
   querySummary.classList.add("hidden");
   overviewBlock.classList.add("hidden");
   clustersBlock.classList.add("hidden");
+  paginationBlock.classList.add("hidden");
   statusText.textContent = "等待查询";
   hideMessage();
   exportButtons.forEach((button) => {
     button.disabled = true;
   });
+});
+
+prevPageButton.addEventListener("click", async () => {
+  const page = Number(state.response?.meta?.page || 1);
+  if (page > 1) {
+    await performSearch({ useSession: true, page: page - 1 });
+  }
+});
+
+nextPageButton.addEventListener("click", async () => {
+  const page = Number(state.response?.meta?.page || 1);
+  const totalPages = Number(state.response?.meta?.total_pages || 1);
+  if (page < totalPages) {
+    await performSearch({ useSession: true, page: page + 1 });
+  }
 });
 
 sortBy.addEventListener("change", renderAll);
@@ -106,6 +99,59 @@ exportButtons.forEach((button) => {
   });
 });
 
+async function performSearch({ useSession, page = 1 }) {
+  setLoading(true);
+  hideMessage();
+  try {
+    let response;
+    if (useSession && state.response?.meta?.search_session_id) {
+      const payload = {
+        search_session_id: state.response.meta.search_session_id,
+        page,
+        result_limit: getResultLimit(),
+      };
+      response = await fetch("/api/search", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+    } else {
+      pageInput.value = String(page);
+      const payload = new FormData(form);
+      response = await fetch("/api/search", {
+        method: "POST",
+        body: payload,
+      });
+    }
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error || "搜索失败");
+    }
+    state.response = data;
+    pageInput.value = String(data.meta?.page || page);
+    exportButtons.forEach((button) => {
+      button.disabled = false;
+    });
+    renderAll();
+  } catch (error) {
+    state.response = null;
+    exportButtons.forEach((button) => {
+      button.disabled = true;
+    });
+    resultsList.innerHTML = "";
+    querySummary.classList.add("hidden");
+    overviewBlock.classList.add("hidden");
+    clustersBlock.classList.add("hidden");
+    paginationBlock.classList.add("hidden");
+    showMessage(error.message, true);
+    statusText.textContent = "查询失败";
+  } finally {
+    setLoading(false);
+  }
+}
+
 function renderAll() {
   if (!state.response) {
     return;
@@ -113,6 +159,7 @@ function renderAll() {
   renderQuerySummary();
   renderOverview();
   renderClusters();
+  renderPagination();
   renderResults();
   renderWarnings();
 }
@@ -142,9 +189,15 @@ function renderOverview() {
       <h3>检索综述</h3>
       <p>${escapeHtml(state.response.overview_summary || "")}</p>
       <div class="meta-row">
+        <span>模式 ${escapeHtml(state.response.meta?.search_mode || "standard")}</span>
+        <span>请求数 ${state.response.meta?.requested_count || 0}</span>
+        <span>总结果 ${state.response.meta?.total_results || 0}</span>
         <span>候选数 ${state.response.meta?.candidate_count || 0}</span>
-        <span>返回数 ${state.response.meta?.returned_count || 0}</span>
-        <span>数据源 ${escapeHtml(state.response.meta?.source || "")}</span>
+      </div>
+      <div class="meta-row">
+        <span>页数 ${state.response.meta?.page || 1}/${state.response.meta?.total_pages || 1}</span>
+        <span>bulk 页抓取 ${state.response.meta?.bulk_pages_fetched || 0}</span>
+        <span>缓存命中 ${state.response.meta?.cache_hit ? "是" : "否"}</span>
       </div>
     </div>
   `;
@@ -160,6 +213,7 @@ function renderClusters() {
   clustersBlock.innerHTML = `
     <div class="clusters-wrap">
       ${clusters
+        .slice(0, 12)
         .map(
           (cluster) => `
             <div class="cluster-pill">
@@ -174,6 +228,20 @@ function renderClusters() {
   clustersBlock.classList.remove("hidden");
 }
 
+function renderPagination() {
+  const meta = state.response.meta || {};
+  const totalPages = Number(meta.total_pages || 1);
+  const currentPage = Number(meta.page || 1);
+  if (totalPages <= 1) {
+    paginationBlock.classList.add("hidden");
+    return;
+  }
+  pageStatus.textContent = `第 ${currentPage} / ${totalPages} 页 · 共 ${meta.total_results || 0} 条`;
+  prevPageButton.disabled = !meta.has_prev_page;
+  nextPageButton.disabled = !meta.has_next_page;
+  paginationBlock.classList.remove("hidden");
+}
+
 function renderWarnings() {
   const warnings = state.response.warnings || [];
   if (!warnings.length) {
@@ -185,7 +253,7 @@ function renderWarnings() {
 
 function renderResults() {
   const results = sortResults(filteredResults());
-  statusText.textContent = `展示 ${results.length} 条结果`;
+  statusText.textContent = `当前页展示 ${results.length} 条结果`;
   if (!results.length) {
     resultsList.innerHTML = `<div class="empty-state">当前筛选条件下没有结果。</div>`;
     return;
@@ -301,6 +369,11 @@ function hideMessage() {
   messageBox.textContent = "";
   messageBox.classList.add("hidden");
   messageBox.classList.remove("error");
+}
+
+function getResultLimit() {
+  const input = form.querySelector('input[name="result_limit"]');
+  return Number(input?.value || 20);
 }
 
 function formatScore(value) {

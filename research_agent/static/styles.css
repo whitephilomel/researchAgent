@@ -461,3 +461,37 @@ button:disabled {
     grid-template-columns: 1fr;
   }
 }
+
+.toggle-card {
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.58);
+}
+
+.toggle-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.toggle-head input[type="checkbox"] {
+  width: auto;
+}
+
+.pagination-block {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.56);
+}
+
+#page-status {
+  color: var(--muted);
+  font-size: 14px;
+}

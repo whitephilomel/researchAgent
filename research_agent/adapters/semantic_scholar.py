@@ -19,9 +19,7 @@ class SemanticScholarAdapter(BasePaperAdapter):
         self.session = requests.Session()
         self.session.headers.update({"User-Agent": "research-agent/1.0"})
         if settings.semantic_scholar_api_key:
-            self.session.headers.update(
-                {"x-api-key": settings.semantic_scholar_api_key}
-            )
+            self.session.headers.update({"x-api-key": settings.semantic_scholar_api_key})
 
     def lookup_paper(self, identifier: str) -> CandidatePaper | None:
         safe_identifier = quote(identifier, safe=":/")
@@ -39,10 +37,7 @@ class SemanticScholarAdapter(BasePaperAdapter):
             return None
         payload = self._get(
             "/paper/search/match",
-            params={
-                "query": title,
-                "fields": self.settings.paper_fields_query,
-            },
+            params={"query": title, "fields": self.settings.paper_fields_query},
             allow_not_found=True,
         )
         if not payload or not payload.get("data"):
@@ -52,28 +47,73 @@ class SemanticScholarAdapter(BasePaperAdapter):
     def search_ranked(self, query: str, limit: int) -> list[CandidatePaper]:
         if not query.strip():
             return []
-        payload = self._get(
-            "/paper/search",
-            params={
-                "query": query,
-                "limit": max(1, min(limit, 100)),
-                "fields": self.settings.paper_fields_query,
-            },
-        )
-        return self._map_many(payload.get("data", []), "ranked_search")
+        try:
+            payload = self._get(
+                "/paper/search",
+                params={
+                    "query": query,
+                    "limit": max(1, min(limit, self.settings.max_ranked_page_size)),
+                    "fields": self.settings.paper_fields_query,
+                },
+            )
+            return self._map_many(payload.get("data", []), "ranked_search")[:limit]
+        except RuntimeError:
+            return self.search_bulk(query, limit)
 
     def search_bulk(self, query: str, limit: int) -> list[CandidatePaper]:
         if not query.strip():
             return []
+        capped_limit = max(1, min(limit, self.settings.max_bulk_page_size))
         payload = self._get(
             "/paper/search/bulk",
             params={
                 "query": query,
-                "limit": max(1, min(limit, 100)),
+                "limit": capped_limit,
                 "fields": self.settings.paper_fields_query,
             },
         )
-        return self._map_many(payload.get("data", []), "bulk_search")
+        return self._map_many(payload.get("data", []), "bulk_search")[:capped_limit]
+
+    def search_bulk_all(
+        self,
+        query: str,
+        max_items: int | None = None,
+    ) -> tuple[list[CandidatePaper], dict[str, Any]]:
+        if not query.strip():
+            return [], {"pages_fetched": 0, "total_available": 0, "completed": True}
+        items: list[CandidatePaper] = []
+        token: str | None = None
+        total_available = 0
+        pages_fetched = 0
+        completed = True
+        while True:
+            params = {
+                "query": query,
+                "limit": self.settings.max_bulk_page_size,
+                "fields": self.settings.paper_fields_query,
+            }
+            if token:
+                params["token"] = token
+            payload = self._get("/paper/search/bulk", params=params)
+            pages_fetched += 1
+            if not total_available:
+                total_available = int(payload.get("total") or 0)
+            mapped = self._map_many(payload.get("data", []), "bulk_search")
+            items.extend(mapped)
+            token = payload.get("token")
+            if max_items and len(items) >= max_items:
+                items = items[:max_items]
+                completed = total_available <= len(items)
+                break
+            if not token or not mapped:
+                completed = True
+                break
+            time.sleep(self.settings.bulk_page_sleep_seconds)
+        return items, {
+            "pages_fetched": pages_fetched,
+            "total_available": total_available,
+            "completed": completed,
+        }
 
     def _get(
         self,
@@ -106,18 +146,10 @@ class SemanticScholarAdapter(BasePaperAdapter):
             return None
         raise RuntimeError(f"Semantic Scholar request failed: {last_error}")
 
-    def _map_many(
-        self,
-        items: list[dict[str, Any]],
-        recall_source: str,
-    ) -> list[CandidatePaper]:
+    def _map_many(self, items: list[dict[str, Any]], recall_source: str) -> list[CandidatePaper]:
         return [self._map_paper(item, recall_source) for item in items]
 
-    def _map_paper(
-        self,
-        payload: dict[str, Any],
-        recall_source: str,
-    ) -> CandidatePaper:
+    def _map_paper(self, payload: dict[str, Any], recall_source: str) -> CandidatePaper:
         authors = [
             author.get("name", "").strip()
             for author in payload.get("authors", [])

@@ -39,6 +39,7 @@ def create_app(settings: Settings | None = None) -> Flask:
         return render_template(
             "index.html",
             search_limit=settings.search_limit,
+            max_search_limit=settings.max_search_limit,
             level_labels=settings.level_labels,
         )
 

@@ -27,6 +27,10 @@ class QueryInput(Serializable):
     pdf_filename: str = ""
     pdf_text: str = ""
     pdf_parse_warning: str = ""
+    result_limit: int = 20
+    page: int = 1
+    exhaustive_search: bool = False
+    search_session_id: str = ""
 
     def has_any_content(self) -> bool:
         return any(

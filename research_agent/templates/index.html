@@ -18,12 +18,12 @@
         </div>
         <div class="hero-card">
           <div class="metric">
-            <span>默认返回</span>
+            <span>默认每页返回</span>
             <strong>{{ search_limit }}</strong>
           </div>
           <div class="metric">
-            <span>分级语义</span>
-            <strong>A / B / C / D</strong>
+            <span>用户可选上限</span>
+            <strong>{{ max_search_limit }}</strong>
           </div>
           <div class="metric">
             <span>数据源</span>
@@ -39,6 +39,7 @@
             <p>至少填写一种输入方式，PDF 可与文本混合使用。</p>
           </div>
           <form id="search-form" class="query-form">
+            <input type="hidden" id="page-input" name="page" value="1">
             <label>
               <span>论文标题</span>
               <input type="text" name="title" placeholder="例如: Attention Is All You Need">
@@ -65,9 +66,22 @@
               <span>研究方向/自然语言需求</span>
               <textarea name="topic_text" rows="5" placeholder="例如：帮我找多模态医学影像报告生成方向中，结合 Transformer 和 RAG 的高相关论文"></textarea>
             </label>
-            <label>
-              <span>PDF 文件</span>
-              <input type="file" name="pdf_file" accept="application/pdf">
+            <div class="split-row">
+              <label>
+                <span>每页条数</span>
+                <input type="number" name="result_limit" min="1" max="{{ max_search_limit }}" step="1" value="{{ search_limit }}">
+              </label>
+              <label>
+                <span>PDF 文件</span>
+                <input type="file" name="pdf_file" accept="application/pdf">
+              </label>
+            </div>
+            <label class="toggle-card">
+              <span class="toggle-head">
+                <input type="checkbox" name="exhaustive_search" value="true">
+                <strong>全量检索开关</strong>
+              </span>
+              <small>开启后系统会通过 Semantic Scholar bulk 分页抓取更多相关文献，并启用服务端分页浏览；耗时和 API 压力会明显上升。</small>
             </label>
             <div class="actions-row">
               <button type="submit" class="primary-button">开始检索</button>
@@ -116,6 +130,11 @@
           <section id="query-summary" class="summary-block hidden"></section>
           <section id="overview-block" class="overview-block hidden"></section>
           <section id="clusters-block" class="clusters-block hidden"></section>
+          <section id="pagination-block" class="pagination-block hidden">
+            <button id="prev-page" class="ghost-button" type="button">上一页</button>
+            <span id="page-status">第 1 页</span>
+            <button id="next-page" class="ghost-button" type="button">下一页</button>
+          </section>
           <section id="results-list" class="results-list"></section>
         </section>
       </main>
